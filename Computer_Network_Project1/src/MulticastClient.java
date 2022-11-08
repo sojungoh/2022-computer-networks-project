@@ -1,24 +1,33 @@
 import java.io.IOException;
 import java.net.*;
-import java.util.Stack;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
 
-public class MulticastHandler implements Runnable {
+public class MulticastClient implements Runnable {
 
     private int port;
     private String userName;
     private MulticastSocket socket;
-    private Stack<String> chatRoomIp;
+    private String chatRoomIp;
 
-    public MulticastHandler(String port_arg) throws IOException {
-       port = Integer.parseInt(port_arg);
-       chatRoomIp = new Stack<>();
-       socket = new MulticastSocket(port);
+    public MulticastClient(int port, MulticastSocket socket) throws IOException {
+        this.port = port;
+        this.socket = socket;
+    }
+
+    public int getPort() {
+        return this.port;
     }
 
     public String getUserName() {
         return this.userName;
+    }
+
+    public String getIpAddress() {
+        return this.chatRoomIp;
     }
 
     public void joinChatRoom(String chatRoomName, String userName) throws IOException {
@@ -26,12 +35,14 @@ public class MulticastHandler implements Runnable {
         this.userName = userName;
         String ipAddress = getIpByChatRoomName(chatRoomName);
 
-        if(ipAddress != null) {
-            chatRoomIp.push(ipAddress);
-            InetAddress mcastaddr = InetAddress.getByName(ipAddress);
-            InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            NetworkInterface netIf = NetworkInterface.getByName("bge0");
-            socket.joinGroup(group, netIf);
+        System.out.println("ip: " + ipAddress);
+
+        if (ipAddress != null) {
+            this.chatRoomIp = ipAddress;
+            InetAddress group = InetAddress.getByName(ipAddress);
+            //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
+            //NetworkInterface netIf = NetworkInterface.getByName("bge0");
+            socket.joinGroup(group);
         }
     }
 
@@ -39,7 +50,7 @@ public class MulticastHandler implements Runnable {
 
         byte[] chunk = new byte[512];
 
-        while(true) {
+        while (true) {
             DatagramPacket packet = new DatagramPacket(chunk, chunk.length);
 
             socket.receive(packet);
@@ -51,30 +62,11 @@ public class MulticastHandler implements Runnable {
         }
     }
 
-    public void sendMessage(String message, String userName)
-            throws IOException {
-
-        String ipAddress = chatRoomIp.peek();
-        InetAddress group = InetAddress.getByName(ipAddress);
-        String msgWithName = userName + ": " + message;
-
-        byte[] msg = msgWithName.getBytes();
-        DatagramPacket packet = new DatagramPacket(msg, msg.length, group, port);
-        socket.send(packet);
-    }
-
     public void leaveChatRoom() throws IOException {
-        String currRoomIp = chatRoomIp.peek();
-
-        InetAddress mcastaddr = InetAddress.getByName(currRoomIp);
-        InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        NetworkInterface netIf = NetworkInterface.getByName("bge0");
-        socket.leaveGroup(group, netIf);
-
-        chatRoomIp.pop();
-
-        if(chatRoomIp.empty())
-            socket.close();
+        InetAddress group = InetAddress.getByName(chatRoomIp);
+        //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
+        //NetworkInterface netIf = NetworkInterface.getByName("bge0");
+        socket.leaveGroup(group);
     }
 
     public String getIpByChatRoomName(String chatRoomName) {
@@ -104,12 +96,14 @@ public class MulticastHandler implements Runnable {
 
     @Override
     public void run() {
+
         try {
 
             receiveMessage();
 
-        } catch(IOException e){
+        } catch (IOException e) {
             socket.close();
+            //e.printStackTrace();
         }
     }
 }
