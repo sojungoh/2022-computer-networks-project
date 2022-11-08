@@ -23,7 +23,7 @@ public class MulticastServer implements Runnable {
 
         DatagramChannel datagramChannel=DatagramChannel.open();
         datagramChannel.bind(null);
-        NetworkInterface networkInterface=NetworkInterface.getByName("lo");
+        NetworkInterface networkInterface=NetworkInterface.getByName("bge0");
         datagramChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF,networkInterface);
         ByteBuffer byteBuffer=ByteBuffer.wrap(message.getBytes());
         InetSocketAddress inetSocketAddress = new InetSocketAddress(ipAddress, port);

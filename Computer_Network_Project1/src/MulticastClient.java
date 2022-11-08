@@ -46,7 +46,7 @@ public class MulticastClient implements Runnable {
             this.chatRoomIp = ipAddress;
 
             DatagramChannel datagramChannel = DatagramChannel.open(StandardProtocolFamily.INET);
-            NetworkInterface networkInterface = NetworkInterface.getByName("eth0");
+            NetworkInterface networkInterface = NetworkInterface.getByName("bge0");
             datagramChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
             datagramChannel.bind(new InetSocketAddress(port));
             datagramChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
@@ -91,7 +91,7 @@ public class MulticastClient implements Runnable {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
         //String myIp = getMyIPAddress();
-        NetworkInterface netIf = NetworkInterface.getByName("lo");
+        NetworkInterface netIf = NetworkInterface.getByName("bge0");
         //socket.setNetworkInterface(netIf);
         socket.leaveGroup(group, netIf);
         memKey.drop();
