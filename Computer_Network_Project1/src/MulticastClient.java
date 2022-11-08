@@ -5,6 +5,7 @@ import java.security.NoSuchAlgorithmException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.util.Enumeration;
 
 public class MulticastClient implements Runnable {
 
@@ -16,6 +17,27 @@ public class MulticastClient implements Runnable {
     public MulticastClient(int port, MulticastSocket socket) throws IOException {
         this.port = port;
         this.socket = socket;
+    }
+
+    public String getMyIPAddress() throws SocketException {
+
+        String ret = null;
+
+        Enumeration e = NetworkInterface.getNetworkInterfaces();
+        int ctr = 0;
+        while (e.hasMoreElements()) {
+            NetworkInterface n = (NetworkInterface) e.nextElement();
+            Enumeration ee = n.getInetAddresses();
+            while (ee.hasMoreElements() && ctr < 3) {
+                ctr++;
+                if (ctr == 3)
+                    break;
+                InetAddress i = (InetAddress) ee.nextElement();
+                if (ctr == 2)
+                    ret = i.getHostAddress();
+            }
+        }
+        return ret;
     }
 
     public int getPort() {
@@ -43,7 +65,8 @@ public class MulticastClient implements Runnable {
             //SocketAddress group = new InetSocketAddress(ipAddress, port);
             InetAddress mcastaddr = InetAddress.getByName(ipAddress);
             InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            NetworkInterface netIf = NetworkInterface.getByName("127.0.0.1");
+            String myIp = getMyIPAddress();
+            NetworkInterface netIf = NetworkInterface.getByName(myIp);
             if(netIf == null)
                 socket.joinGroup(mcastaddr);
             else
@@ -70,7 +93,8 @@ public class MulticastClient implements Runnable {
     public void leaveChatRoom() throws IOException {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        NetworkInterface netIf = NetworkInterface.getByName("127.0.0.1");
+        String myIp = getMyIPAddress();
+        NetworkInterface netIf = NetworkInterface.getByName(myIp);
 
         socket.leaveGroup(group, netIf);
     }
