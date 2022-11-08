@@ -39,10 +39,11 @@ public class MulticastClient implements Runnable {
 
         if (ipAddress != null) {
             this.chatRoomIp = ipAddress;
+
             //SocketAddress group = new InetSocketAddress(ipAddress, port);
             InetAddress mcastaddr = InetAddress.getByName(ipAddress);
             InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            NetworkInterface netIf = NetworkInterface.getByName("lo");
+            NetworkInterface netIf = NetworkInterface.getByName("127.0.0.1");
             if(netIf == null)
                 socket.joinGroup(mcastaddr);
             else
@@ -69,9 +70,8 @@ public class MulticastClient implements Runnable {
     public void leaveChatRoom() throws IOException {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        NetworkInterface netIf = NetworkInterface.getByName("lo");
-        //socket.setReuseAddress(true);
-        //socket.setSoTimeout(5000);
+        NetworkInterface netIf = NetworkInterface.getByName("127.0.0.1");
+
         socket.leaveGroup(group, netIf);
     }
 
