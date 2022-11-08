@@ -39,10 +39,13 @@ public class MulticastClient implements Runnable {
 
         if (ipAddress != null) {
             this.chatRoomIp = ipAddress;
-            InetAddress group = InetAddress.getByName(ipAddress);
-            //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            //NetworkInterface netIf = NetworkInterface.getByName("bge0");
-            socket.joinGroup(group);
+            socket.setReuseAddress(true);
+            socket.setSoTimeout(5000);
+
+            InetAddress mcastaddr = InetAddress.getByName(ipAddress);
+            InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
+            NetworkInterface netIf = NetworkInterface.getByName("eth0");
+            socket.joinGroup(group, netIf);
         }
     }
 
@@ -63,10 +66,10 @@ public class MulticastClient implements Runnable {
     }
 
     public void leaveChatRoom() throws IOException {
-        InetAddress group = InetAddress.getByName(chatRoomIp);
-        //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        //NetworkInterface netIf = NetworkInterface.getByName("bge0");
-        socket.leaveGroup(group);
+        InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
+        InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
+        NetworkInterface netIf = NetworkInterface.getByName("eth0");
+        socket.leaveGroup(group, netIf);
     }
 
     public String getIpByChatRoomName(String chatRoomName) {
