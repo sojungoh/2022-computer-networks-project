@@ -39,11 +39,14 @@ public class MulticastClient implements Runnable {
 
         if (ipAddress != null) {
             this.chatRoomIp = ipAddress;
-            SocketAddress group = new InetSocketAddress(ipAddress, port);
-            //InetAddress mcastaddr = InetAddress.getByName(ipAddress);
-            //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
+            //SocketAddress group = new InetSocketAddress(ipAddress, port);
+            InetAddress mcastaddr = InetAddress.getByName(ipAddress);
+            InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
             NetworkInterface netIf = NetworkInterface.getByName("eth0");
-            socket.joinGroup(group, netIf);
+            if(netIf == null)
+                socket.joinGroup(mcastaddr);
+            else
+                socket.joinGroup(group, netIf);
         }
     }
 
