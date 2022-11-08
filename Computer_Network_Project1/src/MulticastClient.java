@@ -68,7 +68,9 @@ public class MulticastClient implements Runnable {
     public void leaveChatRoom() throws IOException {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        NetworkInterface netIf = NetworkInterface.getByName("eth0");
+        NetworkInterface netIf = NetworkInterface.getByName("bge0");
+        socket.setReuseAddress(true);
+        socket.setSoTimeout(5000);
         socket.leaveGroup(group, netIf);
     }
 
