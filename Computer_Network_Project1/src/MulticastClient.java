@@ -1,11 +1,13 @@
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.MembershipKey;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
-import java.util.Enumeration;
 
 public class MulticastClient implements Runnable {
 
@@ -13,31 +15,12 @@ public class MulticastClient implements Runnable {
     private String userName;
     private MulticastSocket socket;
     private String chatRoomIp;
+    private DatagramChannel channel;
+    private MembershipKey memKey;
 
     public MulticastClient(int port, MulticastSocket socket) throws IOException {
         this.port = port;
         this.socket = socket;
-    }
-
-    public String getMyIPAddress() throws SocketException {
-
-        String ret = null;
-
-        Enumeration e = NetworkInterface.getNetworkInterfaces();
-        int ctr = 0;
-        while (e.hasMoreElements()) {
-            NetworkInterface n = (NetworkInterface) e.nextElement();
-            Enumeration ee = n.getInetAddresses();
-            while (ee.hasMoreElements() && ctr < 3) {
-                ctr++;
-                if (ctr == 3)
-                    break;
-                InetAddress i = (InetAddress) ee.nextElement();
-                if (ctr == 2)
-                    ret = i.getHostAddress();
-            }
-        }
-        return ret;
     }
 
     public int getPort() {
@@ -62,15 +45,23 @@ public class MulticastClient implements Runnable {
         if (ipAddress != null) {
             this.chatRoomIp = ipAddress;
 
+            DatagramChannel datagramChannel = DatagramChannel.open(StandardProtocolFamily.INET);
+            NetworkInterface networkInterface = NetworkInterface.getByName("eth0");
+            datagramChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+            datagramChannel.bind(new InetSocketAddress(port));
+            datagramChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
+            InetAddress inetAddress = InetAddress.getByName(ipAddress);
+            MembershipKey membershipKey = datagramChannel.join(inetAddress, networkInterface);
+
+            this.channel = datagramChannel;
+            this.memKey = membershipKey;
+
             //SocketAddress group = new InetSocketAddress(ipAddress, port);
             InetAddress mcastaddr = InetAddress.getByName(ipAddress);
             InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            String myIp = getMyIPAddress();
-            NetworkInterface netIf = NetworkInterface.getByName(myIp);
-            if(netIf == null)
-                socket.joinGroup(mcastaddr);
-            else
-                socket.joinGroup(group, netIf);
+
+            NetworkInterface netIf = NetworkInterface.getByName("bge0");
+            socket.joinGroup(group, netIf);
         }
     }
 
@@ -88,15 +79,22 @@ public class MulticastClient implements Runnable {
 
             if ("OK".equals(message)) break;
         }
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(512);
+        channel.receive(byteBuffer);
+        byteBuffer.flip();
+        byte[] bytes = new byte[byteBuffer.limit()];
+        byteBuffer.get(bytes, 0, byteBuffer.limit());
     }
 
     public void leaveChatRoom() throws IOException {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-        String myIp = getMyIPAddress();
-        NetworkInterface netIf = NetworkInterface.getByName(myIp);
-
+        //String myIp = getMyIPAddress();
+        NetworkInterface netIf = NetworkInterface.getByName("lo");
+        //socket.setNetworkInterface(netIf);
         socket.leaveGroup(group, netIf);
+        memKey.drop();
     }
 
     public String getIpByChatRoomName(String chatRoomName) {
