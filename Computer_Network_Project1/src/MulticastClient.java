@@ -42,8 +42,12 @@ public class MulticastClient implements Runnable {
 
             InetAddress mcastaddr = InetAddress.getByName(ipAddress);
             InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-            NetworkInterface netIf = NetworkInterface.getByName("localhost");
-            socket.joinGroup(group, netIf);
+            NetworkInterface netIf = NetworkInterface.getByName("eth0");
+
+            if(netIf != null)
+                socket.joinGroup(group, netIf);
+            else
+                socket.joinGroup(mcastaddr);
         }
     }
 

@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.net.*;
+import static java.lang.Thread.sleep;
 
 public class MulticastServer implements Runnable {
 
@@ -27,12 +28,11 @@ public class MulticastServer implements Runnable {
 
     @Override
     public void run() {
-
+        
         try {
-
             sendMessage();
-
-        } catch (IOException e) {
+            sleep(5000);
+        } catch (IOException | InterruptedException e) {
             socket.close();
             //e.printStackTrace();
         }
