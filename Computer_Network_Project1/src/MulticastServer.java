@@ -1,7 +1,5 @@
 import java.io.IOException;
 import java.net.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
 
 public class MulticastServer implements Runnable {
 
@@ -19,22 +17,12 @@ public class MulticastServer implements Runnable {
 
     public void sendMessage() throws IOException {
 
-        //InetAddress group = InetAddress.getByName(ipAddress);
+        InetAddress group = InetAddress.getByName(ipAddress);
 
-        DatagramChannel datagramChannel=DatagramChannel.open();
-        datagramChannel.bind(null);
-        NetworkInterface networkInterface=NetworkInterface.getByName("bge0");
-        datagramChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF,networkInterface);
-        ByteBuffer byteBuffer=ByteBuffer.wrap(message.getBytes());
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(ipAddress, port);
-        datagramChannel.send(byteBuffer,inetSocketAddress);
+        byte[] msg = message.getBytes();
+        DatagramPacket packet = new DatagramPacket(msg, msg.length, group, port);
 
-
-        //InetAddress mcastaddr = InetAddress.getByName(ipAddress);
-        //InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-
-        //byte[] msg = message.getBytes();
-        //DatagramPacket packet = new DatagramPacket(msg, msg.length, group, port);
+        socket.send(packet);
     }
 
     @Override

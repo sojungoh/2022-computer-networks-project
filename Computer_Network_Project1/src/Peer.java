@@ -7,7 +7,7 @@ public class Peer {
     public static void main(String[] args) throws IOException {
 
         Thread t1, t2;
-        MulticastSocket socket;
+        MulticastSocket socket = null;
 
         if(args.length != 1){
             System.out.println("wrong port number");
