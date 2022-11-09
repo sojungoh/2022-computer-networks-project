@@ -6,13 +6,13 @@ public class MulticastServer implements Runnable {
     private int port;
     private String ipAddress;
     private String message;
-    private MulticastSocket socket;
+    private DatagramSocket socket;
 
-    public MulticastServer(MulticastSocket socket, String msg, int port, String ip) throws IOException {
+    public MulticastServer(String msg, int port, String ip) throws IOException {
         this.port = port;
         this.ipAddress = ip;
         this.message = msg;
-        this.socket = socket;
+        this.socket = new DatagramSocket();
     }
 
     public void sendMessage() throws IOException {

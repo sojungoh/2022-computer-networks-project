@@ -42,9 +42,8 @@ public class MulticastClient implements Runnable {
 
             InetAddress mcastaddr = InetAddress.getByName(ipAddress);
             InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-
-            //NetworkInterface netIf = NetworkInterface.getByName("bge0");
-            socket.joinGroup(mcastaddr);
+            NetworkInterface netIf = NetworkInterface.getByName("localhost");
+            socket.joinGroup(group, netIf);
         }
     }
 
@@ -68,9 +67,8 @@ public class MulticastClient implements Runnable {
     public void leaveChatRoom() throws IOException {
         InetAddress mcastaddr = InetAddress.getByName(chatRoomIp);
         InetSocketAddress group = new InetSocketAddress(mcastaddr, port);
-
-        //NetworkInterface netIf = NetworkInterface.getByName("bge0");
-        socket.leaveGroup(mcastaddr);
+        NetworkInterface netIf = NetworkInterface.getByName("localhost");
+        socket.leaveGroup(group, netIf);
     }
 
     public String getIpByChatRoomName(String chatRoomName) {

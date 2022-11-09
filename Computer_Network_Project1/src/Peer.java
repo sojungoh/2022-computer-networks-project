@@ -72,7 +72,7 @@ public class Peer {
             else {
                 String msgWithName = client.getUserName() + ": " + str;
                 MulticastServer server =
-                        new MulticastServer(socket, msgWithName,
+                        new MulticastServer(msgWithName,
                                 client.getPort(), client.getIpAddress());
                 t2 = new Thread(server);
                 t2.start();
