@@ -4,24 +4,38 @@ import java.net.*;
 
 public class ClientHandler implements Runnable {
 
-    private static HashMap<String, ArrayList<ClientHandler>> chatRoomMap = new HashMap<>();
-    private Socket socket;
-    private BufferedReader reader;
-    private BufferedWriter writer;
-    private String userName;
+    public static HashMap<String, ArrayList<ClientHandler>> chatRoomMap = new HashMap<>();
+    private Socket mainSocket;
+    private ServerSocket subSocket;
+    private BufferedReader msgReader;
+    private BufferedWriter msgWriter;
     private String currChatRoomName;
+    private String currUserName;
 
-    public ClientHandler(Socket socket) throws IOException {
+    public ClientHandler(Socket mainSocket, ServerSocket subSocket) throws IOException {
         try {
 
-            this.socket = socket;
-            this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-            this.userName = reader.readLine();
+            this.mainSocket = mainSocket;
+            this.subSocket = subSocket;
+            this.msgReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
+            this.msgWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
             this.currChatRoomName = null;
+            this.currUserName = null;
 
         } catch (IOException e) {
-            closeEverything(socket, reader, writer);
+            closeResources();
+        }
+    }
+
+    public void writeToBuffer(String msg) {
+        try {
+
+            msgWriter.write(msg);
+            msgWriter.newLine();
+            msgWriter.flush();
+
+        } catch(IOException e) {
+            closeResources();
         }
     }
 
@@ -29,62 +43,33 @@ public class ClientHandler implements Runnable {
         return chatRoomMap.containsKey(chatRoomName);
     }
 
-    public void createChatRoom(String chatRoomName) {
+    public void createChatRoom(String chatRoomName, String userName) {
 
-        try {
-            if(currChatRoomName != null) {
-                writer.write("You are already in a chatroom.");
-                writer.newLine();
-                writer.flush();
-                return;
-            }
+        if(!isChatRoomExist(chatRoomName)) {
 
-            if(!isChatRoomExist(chatRoomName)) {
+            this.currChatRoomName = chatRoomName;
+            this.currUserName = userName;
 
-                this.currChatRoomName = chatRoomName;
-                chatRoomMap.put(chatRoomName, new ArrayList<ClientHandler>());
-                chatRoomMap.get(chatRoomName).add(this);
-
-                writer.write("\"" + chatRoomName + "\"" + " chatroom has created!");
-                writer.newLine();
-                writer.flush();
-
-                writer.write("You are now connected to \"" + chatRoomName + "\" chatroom as " + userName);
-            }
-            else
-                writer.write("\"" + chatRoomName + "\"" + " chatroom already exists.");
-
-            writer.newLine();
-            writer.flush();
-
-        } catch(IOException e) {
-            closeEverything(socket, reader, writer);
+            chatRoomMap.put(chatRoomName, new ArrayList<>());
+            chatRoomMap.get(chatRoomName).add(this);
+            writeToBuffer("#SUCCESS");
         }
+        else
+            writeToBuffer("#FAIL");
     }
 
-    public void joinChatRoom(String chatRoomName) {
-        try {
-            if(currChatRoomName != null) {
-                writer.write("You are already in a chatroom.");
-                writer.newLine();
-                writer.flush();
-                return;
-            }
+    public void joinChatRoom(String chatRoomName, String userName) {
 
-            if(isChatRoomExist(chatRoomName)) {
-                this.currChatRoomName = chatRoomName;
-                chatRoomMap.get(chatRoomName).add(this);
-                writer.write("You are now connected to \"" + chatRoomName + "\" chatroom as " + userName);
-            }
-            else
-                writer.write("\"" + chatRoomName + "\"" + " chatroom does not exist.");
+        if(isChatRoomExist(chatRoomName)) {
 
-            writer.newLine();
-            writer.flush();
+            this.currChatRoomName = chatRoomName;
+            this.currUserName = userName;
 
-        } catch(IOException e) {
-            closeEverything(socket, reader, writer);
+            chatRoomMap.get(chatRoomName).add(this);
+            writeToBuffer("#SUCCESS");
         }
+        else
+            writeToBuffer("#FAIL");
     }
 
     public void broadcastMessage(String message) {
@@ -92,24 +77,15 @@ public class ClientHandler implements Runnable {
         String chatFormat;
         ArrayList<ClientHandler> clientBuckets;
 
-        if(this.currChatRoomName == null)
-            return;
-
         if(!isChatRoomExist(this.currChatRoomName))
             return;
 
         clientBuckets = chatRoomMap.get(this.currChatRoomName);
 
         for(ClientHandler client : clientBuckets) {
-            try {
-                if(client != this) {
-                    chatFormat = "FROM " + this.userName + ": " + message;
-                    client.writer.write(chatFormat);
-                    client.writer.newLine();
-                    client.writer.flush();
-                }
-            } catch (IOException e) {
-                closeEverything(socket, reader, writer);
+            if(client != this) {
+                chatFormat = "FROM " + this.currUserName + ": " + message;
+                client.writeToBuffer(chatFormat);
             }
         }
     }
@@ -118,61 +94,112 @@ public class ClientHandler implements Runnable {
 
         ArrayList<ClientHandler> clientBuckets;
 
-        if(this.currChatRoomName == null)
-            return;
-
         if(!isChatRoomExist(this.currChatRoomName))
             return;
 
         clientBuckets = chatRoomMap.get(this.currChatRoomName);
         clientBuckets.remove(this);
+
+        if(clientBuckets.isEmpty()) {
+            chatRoomMap.remove(this.currChatRoomName);
+        }
+
+        this.currChatRoomName = null;
+        this.currUserName = null;
+
+        writeToBuffer("Exit the chatroom");
     }
 
     public void sendChatRoomInfo() {
 
-        ArrayList<ClientHandler> clientBuckets;
         int order = 1;
+        ArrayList<ClientHandler> clientBuckets;
+
+        if(!isChatRoomExist(this.currChatRoomName)) {
+            writeToBuffer("No chatroom status");
+            return;
+        }
+
+        clientBuckets = chatRoomMap.get(this.currChatRoomName);
+
+        writeToBuffer("Chatroom name: " + this.currChatRoomName);
+        writeToBuffer("----- member list -----");
+
+        for(ClientHandler client : clientBuckets) {
+            writeToBuffer(order + ". " + client.currUserName);
+            order += 1;
+        }
+    }
+
+    public void receiveFile(String fileName) {
+
+        int readBytes;
+        byte[] buffer = new byte[64*1024];
 
         try {
-            if(this.currChatRoomName == null || !isChatRoomExist(this.currChatRoomName)) {
-                writer.write("No chatroom status");
-                writer.newLine();
-                writer.flush();
+            fileName = "1" + fileName;
+
+            Socket socket = subSocket.accept();
+            BufferedInputStream fileReceiver = new BufferedInputStream(socket.getInputStream());
+            FileOutputStream fos = new FileOutputStream(fileName);
+
+            while((readBytes = fileReceiver.read(buffer, 0, buffer.length)) != -1) {
+                fos.write(buffer, 0, readBytes);
+                fos.flush();
+            }
+            fos.close();
+            fileReceiver.close();
+
+            String msg = "Get a file => " + fileName;
+            broadcastMessage(msg);
+
+        } catch(IOException e) {
+            closeResources();
+        }
+    }
+
+    public void sendFile(String fileName) {
+
+        int readBytes;
+        byte[] buffer = new byte[64*1024];  // 64KiB
+        File file = new File(fileName);
+
+        try {
+            if(!file.exists()) {
+                writeToBuffer("File name \"" + fileName + "\" does not exist.");
                 return;
             }
 
-            clientBuckets = chatRoomMap.get(this.currChatRoomName);
+            Socket socket = subSocket.accept();
+            BufferedOutputStream fileSender = new BufferedOutputStream(socket.getOutputStream());
+            FileInputStream fis = new FileInputStream(file);
 
-            writer.write("Chatroom name: " + this.currChatRoomName);
-            writer.newLine();
-            writer.flush();
-
-            writer.write("----- member list -----");
-            writer.newLine();
-            writer.flush();
-
-            for(ClientHandler client : clientBuckets) {
-                writer.write(order + ". " + client.userName);
-                writer.newLine();
-                writer.flush();
-                order += 1;
+            while((readBytes = fis.read(buffer)) > 0) {
+                fileSender.write(buffer, 0, readBytes);
+                fileSender.flush();
             }
+            fis.close();
+            fileSender.close();
 
-        } catch (IOException e) {
-            closeEverything(socket, reader, writer);
+        } catch(IOException e) {
+            closeResources();
         }
-
     }
 
-    public void closeEverything(Socket socket, BufferedReader reader, BufferedWriter writer) {
+    public void closeResources() {
+
         removeClientHandler();
         try {
-            if(reader != null)
-                reader.close();
-            if(writer != null)
-                writer.close();
-            if(socket != null)
-                socket.close();
+
+            if(mainSocket != null)
+                mainSocket.close();
+            if(subSocket != null)
+                subSocket.close();
+            if(msgReader != null)
+                msgReader.close();
+            if(msgWriter != null)
+                msgWriter.close();
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -181,39 +208,54 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
 
-        String clientMsg = null;
-        String chatRoomName = null;
+        String clientMsg;
+        String chatRoomName;
+        String userName;
+        String fileName;
 
         try {
 
-            while(!socket.isClosed()) {
+            while(!mainSocket.isClosed()) {
 
-                clientMsg = reader.readLine();
+                clientMsg = msgReader.readLine();
 
                 if(clientMsg == null || clientMsg.isEmpty())
                     continue;
 
-                if(clientMsg.equals("#CREATE")) {
-                    chatRoomName = reader.readLine();
-                    createChatRoom(chatRoomName);
-                }
-                else if(clientMsg.equals("#JOIN")) {
-                    chatRoomName = reader.readLine();
-                    joinChatRoom(chatRoomName);
-                }
-                else if(clientMsg.equals("#EXIT")) {
-                    closeEverything(socket, reader, writer);
-                }
-                else if(clientMsg.equals("#STATUS")) {
-                    sendChatRoomInfo();
-                }
-                else {
-                    broadcastMessage(clientMsg);
+                switch (clientMsg) {
+                    case "#CREATE":
+                        chatRoomName = msgReader.readLine();
+                        userName = msgReader.readLine();
+                        createChatRoom(chatRoomName, userName);
+                        break;
+                    case "#JOIN":
+                        chatRoomName = msgReader.readLine();
+                        userName = msgReader.readLine();
+                        joinChatRoom(chatRoomName, userName);
+                        break;
+                    case "#PUT":
+                        fileName = msgReader.readLine();
+                        receiveFile(fileName);
+                        break;
+                    case "#GET":
+                        fileName = msgReader.readLine();
+                        sendFile(fileName);
+                        break;
+                    case "#EXIT":
+                        removeClientHandler();
+                        break;
+                    case "#STATUS":
+                        sendChatRoomInfo();
+                        break;
+                    default:
+                        broadcastMessage(clientMsg);
+                        break;
                 }
             }
+            closeResources();
 
         } catch (IOException e) {
-            closeEverything(socket, reader, writer);
+            closeResources();
         }
     }
 }

@@ -5,83 +5,149 @@ import java.net.*;
 public class Client {
 
     private final Socket mainSocket;
-    private final Socket subSocket;
-    private final BufferedReader bufferedReader;
-    private final BufferedWriter bufferedWriter;
-    private String userName;
+    private final String serverIP;
+    private final int subPort;
+    private final BufferedReader msgReader;
+    private final BufferedWriter msgWriter;
+    private String currChatRoomName;
+    private String currUserName;
 
-    public Client(Socket mainSocket, Socket subSocket, String name) throws IOException {
+    public Client(Socket mainSocket, String serverIP, int subPort) throws IOException {
+
         this.mainSocket = mainSocket;
-        this.subSocket = subSocket;
-        this.bufferedReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
-        this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
-        this.userName = name;
-
-        bufferedWriter.write(userName);
-        bufferedWriter.newLine();
-        bufferedWriter.flush();
-    }
-
-    public void requestToServer(String command, String chatRoomName) {
-        try {
-            bufferedWriter.write(command);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
-
-            if(chatRoomName != null) {
-                bufferedWriter.write(chatRoomName);
-                bufferedWriter.newLine();
-                bufferedWriter.flush();
-            }
-
-            if(command.equals("#EXIT"))
-                closeEverything(mainSocket, bufferedReader, bufferedWriter);
-
-        } catch (IOException e) {
-            closeEverything(mainSocket, bufferedReader, bufferedWriter);
-        }
+        this.serverIP = serverIP;
+        this.subPort = subPort;
+        this.msgReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
+        this.msgWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
+        this.currChatRoomName = null;
+        this.currUserName = null;
 
     }
 
-    public void sendMessage(String message) {
+    public void writeToBuffer(String msg) {
         try {
 
-            bufferedWriter.write(message);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
+            msgWriter.write(msg);
+            msgWriter.newLine();
+            msgWriter.flush();
 
         } catch (IOException e) {
-            closeEverything(mainSocket, bufferedReader, bufferedWriter);
+            closeResources();
         }
     }
 
-    public void listenForMessage() {
+    public void requestChatService(String command, String str1, String str2) {
 
-        new Thread(() -> {
-            String message;
+        writeToBuffer(command);
+        if(str1 != null)
+            writeToBuffer(str1);
+        if(str2 != null)
+            writeToBuffer(str2);
+
+    }
+
+    public Thread listenForMessage() {
+
+        Thread thread = new Thread(() -> {
+            String message = null;
 
             while(!mainSocket.isClosed()) {
                 try {
-                    message = bufferedReader.readLine();
+
+                    message = msgReader.readLine();
 
                     if(message != null && !message.isEmpty())
                         System.out.println(message);
 
                 } catch (IOException e) {
-                    closeEverything(mainSocket, bufferedReader, bufferedWriter);
+                    closeResources();
                 }
             }
-        }).start();
+        });
+
+        thread.start();
+        return thread;
     }
 
-    public void closeEverything(Socket mainSocket, BufferedReader reader, BufferedWriter writer) {
+    public void sendFile(String fileName) {
+
+        int readBytes;
+        byte[] buffer = new byte[64*1024];  // 64KiB
+        File file = new File(fileName);
+
+        if(!file.exists()) {
+            System.out.println("File name \"" + fileName + "\" does not exist.");
+            return;
+        }
+
         try {
-            if(reader != null)
-                reader.close();
-            if(writer != null)
-                writer.close();
+            requestChatService("#PUT", fileName, null);
+
+            Socket socket = new Socket(serverIP, subPort);
+            BufferedOutputStream fileSender = new BufferedOutputStream(socket.getOutputStream());
+            FileInputStream fis = new FileInputStream(file);
+
+            System.out.println("----- sending the file -----");
+            while((readBytes = fis.read(buffer)) > 0) {
+                fileSender.write(buffer, 0, readBytes);
+                fileSender.flush();
+                if(readBytes == 64*1024)
+                    System.out.print("#");
+            }
+            fis.close();
+            fileSender.close();
+            socket.close();
+
+            System.out.println();
+            System.out.println("----- completed -----");
+
+        } catch (IOException e) {
+            closeResources();
+        }
+    }
+
+    public void receiveFile(String fileName) {
+
+        int readBytes;
+        byte[] buffer = new byte[64*1024];
+
+        try {
+            requestChatService("#GET", fileName, null);
+
+            fileName = "2" + fileName;
+
+            Socket socket = new Socket(serverIP, subPort);
+            BufferedInputStream fileReceiver = new BufferedInputStream(socket.getInputStream());
+            FileOutputStream fos = new FileOutputStream(fileName);
+
+            System.out.println("----- downloading the file -----");
+            while((readBytes = fileReceiver.read(buffer, 0, buffer.length)) != -1) {
+                fos.write(buffer, 0, readBytes);
+                fos.flush();
+                if(readBytes == 64*1024)
+                    System.out.print("#");
+            }
+            fos.close();
+            fileReceiver.close();
+            socket.close();
+
+            System.out.println();
+            System.out.println("----- completed -----");
+
+        } catch(IOException e) {
+            closeResources();
+        }
+    }
+
+    public void closeResources() {
+        try {
+
             if(mainSocket != null)
                 mainSocket.close();
+            if(msgReader != null)
+                msgReader.close();
+            if(msgWriter != null)
+                msgWriter.close();
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -92,7 +158,6 @@ public class Client {
 
         String serverIP;
         int mainPort, subPort;
-        Client client = null;
 
         if(args.length != 3){
             System.out.println("You have to enter Server IP address, port 1, port 2");
@@ -105,14 +170,14 @@ public class Client {
 
         Scanner scan = new Scanner(System.in);
         Socket mainSocket = new Socket(serverIP, mainPort);
-        Socket subSocket = new Socket(serverIP, subPort);
 
-        label:
-        while(true) {
+        Client client = new Client(mainSocket, serverIP, subPort);
+        
+        while(!mainSocket.isClosed()) {
 
             String str = scan.nextLine();
 
-            if(str.isEmpty())
+            if(str == null || str.isEmpty())
                 continue;
 
             boolean isCommand = (str.charAt(0) == '#');
@@ -130,16 +195,40 @@ public class Client {
                             continue;
                         }
 
+                        if(client.currChatRoomName != null) {
+                            System.out.println("You are already in a chatroom.");
+                            continue;
+                        }
+
                         String chatRoomName = strArray[1];
                         String userName = strArray[2];
 
-                        if (client == null) {
-                            client = new Client(mainSocket, subSocket, userName);
+                        client.requestChatService(strArray[0], chatRoomName, userName);
+
+                        String respondMsg = client.msgReader.readLine();
+
+                        if(respondMsg.equals("#SUCCESS")) {
+                            client.currChatRoomName = chatRoomName;
+                            client.currUserName = userName;
+
+                            if(strArray[0].equals("#CREATE"))
+                                System.out.println("\"" + chatRoomName + "\"" + " chatroom has created!");
+                            System.out.println("You are now connected to \"" + chatRoomName + "\" chatroom as " + userName);
+
                             client.listenForMessage();
                         }
-                        client.requestToServer(strArray[0], chatRoomName);
+                        else if(respondMsg.equals("#FAIL")) {
+                            if(strArray[0].equals("#CREATE"))
+                                System.out.println("\"" + chatRoomName + "\"" + " chatroom already exists.");
+                            else
+                                System.out.println("\"" + chatRoomName + "\"" + " chatroom does not exist.");
+                        }
+                        else
+                            System.out.println("unrecognized respond message.");
+
                         break;
-                    case "#PUT": {
+                    case "#PUT":
+                    case "#GET":
                         if (strArray.length != 2) {
                             System.out.println("You have to enter (file name).");
                             continue;
@@ -147,19 +236,27 @@ public class Client {
 
                         String fileName = strArray[1];
 
+                        if(client.currChatRoomName != null) {
+                            if(strArray[0].equals("#PUT"))
+                                client.sendFile(fileName);
+                            else
+                                client.receiveFile(fileName);
+                        }
+                        else
+                            System.out.println("You have to join a chatroom first.");
                         break;
-                    }
-                    case "#GET": {
-                        String fileName = strArray[1];
-                        break;
-                    }
                     case "#EXIT":
-                        if (client != null)
-                            client.requestToServer(strArray[0], null);
-                        break label;
+                        if (client.currChatRoomName != null) {
+                            client.requestChatService(strArray[0], null, null);
+                            client.currChatRoomName = null;
+                            client.currUserName = null;
+                        }
+                        else
+                            System.out.println("You are not in a chatroom.");
+                        break;
                     case "#STATUS":
-                        if (client != null)
-                            client.requestToServer(strArray[0], null);
+                        if (client.currChatRoomName != null)
+                            client.requestChatService(strArray[0], null, null);
                         else
                             System.out.println("You have to join a chatroom first.");
                         break;
@@ -170,10 +267,12 @@ public class Client {
             }
             // message From client
             else {
-                if(client != null) {
-                    client.sendMessage(str);
+                if(client.currChatRoomName != null) {
+                    client.writeToBuffer(str);
                 }
             }
         }
+        client.closeResources();
+
     }
 }

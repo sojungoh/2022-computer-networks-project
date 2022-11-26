@@ -3,19 +3,23 @@ import java.net.*;
 
 public class Server {
 
-    private ServerSocket socket;
+    private final ServerSocket mainSocket;
+    private final ServerSocket subSocket;
 
-    public Server(ServerSocket socket) {
-        this.socket = socket;
+    public Server(ServerSocket mainSocket, ServerSocket subSocket) {
+        this.mainSocket = mainSocket;
+        this.subSocket = subSocket;
     }
 
     public void startServer() {
         try {
             Thread thread;
 
-            while(!socket.isClosed()) {
-                Socket testSocket = socket.accept();
-                ClientHandler clientHandler = new ClientHandler(testSocket);
+            while(!mainSocket.isClosed() && !subSocket.isClosed()) {
+
+                Socket mainSocket = this.mainSocket.accept();
+                //Socket subSocket = this.subSocket.accept();
+                ClientHandler clientHandler = new ClientHandler(mainSocket, this.subSocket);
 
                 thread = new Thread(clientHandler);
                 thread.start();
@@ -29,8 +33,12 @@ public class Server {
 
     public void closeServerSocket() {
         try {
-            if (socket != null)
-                socket.close();
+
+            if(mainSocket != null)
+                mainSocket.close();
+            if(subSocket != null)
+                subSocket.close();
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -48,10 +56,10 @@ public class Server {
         mainPort = Integer.parseInt(args[0]);
         subPort = Integer.parseInt(args[1]);
 
-        ServerSocket socket = new ServerSocket(mainPort);
-        Server server = new Server(socket);
+        ServerSocket mainSocket = new ServerSocket(mainPort);
+        ServerSocket subSocket = new ServerSocket(subPort);
+        Server server = new Server(mainSocket, subSocket);
         server.startServer();
-
     }
 
 }
