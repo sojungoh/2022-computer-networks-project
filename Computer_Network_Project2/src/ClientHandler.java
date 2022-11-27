@@ -5,26 +5,22 @@ import java.net.*;
 public class ClientHandler implements Runnable {
 
     public static HashMap<String, ArrayList<ClientHandler>> chatRoomMap = new HashMap<>();
-    private Socket mainSocket;
-    private ServerSocket subSocket;
+    private Socket socket;
+    private ServerSocket serverSocket;
     private BufferedReader msgReader;
     private BufferedWriter msgWriter;
     private String currChatRoomName;
     private String currUserName;
 
-    public ClientHandler(Socket mainSocket, ServerSocket subSocket) throws IOException {
-        try {
+    public ClientHandler(Socket socket, ServerSocket serverSocket) throws IOException {
 
-            this.mainSocket = mainSocket;
-            this.subSocket = subSocket;
-            this.msgReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
-            this.msgWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
-            this.currChatRoomName = null;
-            this.currUserName = null;
+        this.socket = socket;
+        this.serverSocket = serverSocket;
+        this.msgReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        this.msgWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        this.currChatRoomName = null;
+        this.currUserName = null;
 
-        } catch (IOException e) {
-            closeResources();
-        }
     }
 
     public void writeToBuffer(String msg) {
@@ -138,7 +134,7 @@ public class ClientHandler implements Runnable {
         try {
             fileName = "1" + fileName;
 
-            Socket socket = subSocket.accept();
+            Socket socket = serverSocket.accept();
             BufferedInputStream fileReceiver = new BufferedInputStream(socket.getInputStream());
             FileOutputStream fos = new FileOutputStream(fileName);
 
@@ -169,7 +165,7 @@ public class ClientHandler implements Runnable {
         }
 
         try {
-            Socket socket = subSocket.accept();
+            Socket socket = serverSocket.accept();
             BufferedOutputStream fileSender = new BufferedOutputStream(socket.getOutputStream());
             FileInputStream fis = new FileInputStream(file);
 
@@ -190,10 +186,8 @@ public class ClientHandler implements Runnable {
         removeClientHandler();
         try {
 
-            if(mainSocket != null)
-                mainSocket.close();
-            if(subSocket != null)
-                subSocket.close();
+            if(socket != null)
+                socket.close();
             if(msgReader != null)
                 msgReader.close();
             if(msgWriter != null)
@@ -204,6 +198,20 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    public void checkServerConnection() {
+
+        new Thread(() -> {
+
+            while(true) {
+               if(serverSocket.isClosed()){
+                   closeResources();
+                   break;
+               }
+            }
+
+        }).start();
+    }
+
     @Override
     public void run() {
 
@@ -212,16 +220,18 @@ public class ClientHandler implements Runnable {
         String userName;
         String fileName;
 
+        checkServerConnection();
+
         try {
 
-            while(!mainSocket.isClosed()) {
+            while(!socket.isClosed()) {
 
-                System.out.println("waiting");
                 clientMsg = msgReader.readLine();
-                System.out.println("read");
 
-                if(clientMsg == null || clientMsg.isEmpty())
-                    continue;
+                if(clientMsg == null) {
+                    closeResources();
+                    break;
+                }
 
                 switch (clientMsg) {
                     case "#CREATE":
@@ -243,13 +253,10 @@ public class ClientHandler implements Runnable {
                         sendFile(fileName);
                         break;
                     case "#EXIT":
-                        removeClientHandler();
+                        closeResources();
                         break;
                     case "#STATUS":
                         sendChatRoomInfo();
-                        break;
-                    case "#CLOSE":
-                        closeResources();
                         break;
                     default:
                         broadcastMessage(clientMsg);

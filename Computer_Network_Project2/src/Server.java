@@ -21,26 +21,20 @@ public class Server {
 
             while(!mainSocket.isClosed() && !subSocket.isClosed()) {
 
-                Socket mainSocket = this.mainSocket.accept();
-                ClientHandler clientHandler = new ClientHandler(mainSocket, this.subSocket);
+                Socket socket = mainSocket.accept();
+                ClientHandler clientHandler = new ClientHandler(socket, subSocket);
 
+                System.out.println("A new client connected to the server.");
                 thread = new Thread(clientHandler);
                 thread.start();
 
-            }
-
-            if(mainSocket.isClosed()) {
-                System.out.println("mainSocket is closed.");
-            }
-            else if(subSocket.isClosed()) {
-                System.out.println("subSocket is closed.");
             }
 
         } catch (IOException e) {
             closeServerSocket();
         }
 
-        System.out.println("Server disconnected.");
+        System.out.println("Server terminated.");
 
     }
 

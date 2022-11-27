@@ -4,7 +4,7 @@ import java.net.*;
 
 public class Client {
 
-    private final Socket mainSocket;
+    private final Socket socket;
     private final String serverIP;
     private final int subPort;
     private final BufferedReader msgReader;
@@ -12,11 +12,11 @@ public class Client {
 
     public Client(String serverIP, int mainPort, int subPort) throws IOException {
 
-        this.mainSocket = new Socket(serverIP, mainPort);
+        this.socket = new Socket(serverIP, mainPort);
         this.serverIP = serverIP;
         this.subPort = subPort;
-        this.msgReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
-        this.msgWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
+        this.msgReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        this.msgWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 
     }
 
@@ -47,12 +47,17 @@ public class Client {
         new Thread(() -> {
             String message;
 
-            while(!mainSocket.isClosed()) {
+            while(!socket.isClosed()) {
                 try {
-
                     message = msgReader.readLine();
 
-                    if(message != null && !message.isEmpty())
+                    if(message == null) {
+                        closeResources();
+                        System.out.println("Server disconnected.");
+                        break;
+                    }
+
+                    if(!message.isEmpty())
                         System.out.println(message);
 
                 } catch (IOException e) {
@@ -137,8 +142,8 @@ public class Client {
     public void closeResources() {
         try {
 
-            if(mainSocket != null)
-                mainSocket.close();
+            if(socket != null)
+                socket.close();
             if(msgReader != null)
                 msgReader.close();
             if(msgWriter != null)
@@ -155,6 +160,8 @@ public class Client {
         int mainPort, subPort;
         Client client = null;
 
+        System.out.println("Client starts.");
+
         if(args.length != 3){
             System.out.println("You have to enter Server IP address, port 1, port 2");
             System.exit(0);
@@ -168,6 +175,12 @@ public class Client {
 
         label:
         while(true) {
+
+            if(client != null && client.socket.isClosed()) {
+                client.closeResources();
+                System.out.println("Server disconnected.");
+                break;
+            }
 
             String str = scan.nextLine();
 
@@ -198,9 +211,16 @@ public class Client {
                         String userName = strArray[2];
 
                         client = new Client(serverIP, mainPort, subPort);
+
                         client.requestChatService(strArray[0], chatRoomName, userName);
 
                         String respondMsg = client.msgReader.readLine();
+
+                        if(respondMsg == null) {
+                            client.closeResources();
+                            System.out.println("Server disconnected.");
+                            break label;
+                        }
 
                         if(respondMsg.equals("#SUCCESS")) {
                             if(strArray[0].equals("#CREATE"))
@@ -259,10 +279,8 @@ public class Client {
                             System.out.println("You have to join a chatroom first.");
                         break;
                     case "#CLOSE":
-                        if(client != null) {
-                            client.requestChatService(strArray[0], null, null);
+                        if(client != null)
                             client.closeResources();
-                        }
                         break label;
                     default:
                         System.out.println("Unrecognized command.");
