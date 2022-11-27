@@ -9,18 +9,14 @@ public class Client {
     private final int subPort;
     private final BufferedReader msgReader;
     private final BufferedWriter msgWriter;
-    private String currChatRoomName;
-    private String currUserName;
 
-    public Client(Socket mainSocket, String serverIP, int subPort) throws IOException {
+    public Client(String serverIP, int mainPort, int subPort) throws IOException {
 
-        this.mainSocket = mainSocket;
+        this.mainSocket = new Socket(serverIP, mainPort);
         this.serverIP = serverIP;
         this.subPort = subPort;
         this.msgReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
         this.msgWriter = new BufferedWriter(new OutputStreamWriter(mainSocket.getOutputStream()));
-        this.currChatRoomName = null;
-        this.currUserName = null;
 
     }
 
@@ -46,10 +42,10 @@ public class Client {
 
     }
 
-    public Thread listenForMessage() {
+    public void listenForMessage() {
 
-        Thread thread = new Thread(() -> {
-            String message = null;
+        new Thread(() -> {
+            String message;
 
             while(!mainSocket.isClosed()) {
                 try {
@@ -63,10 +59,9 @@ public class Client {
                     closeResources();
                 }
             }
-        });
 
-        thread.start();
-        return thread;
+        }).start();
+
     }
 
     public void sendFile(String fileName) {
@@ -158,6 +153,7 @@ public class Client {
 
         String serverIP;
         int mainPort, subPort;
+        Client client = null;
 
         if(args.length != 3){
             System.out.println("You have to enter Server IP address, port 1, port 2");
@@ -169,11 +165,9 @@ public class Client {
         subPort = Integer.parseInt(args[2]);
 
         Scanner scan = new Scanner(System.in);
-        Socket mainSocket = new Socket(serverIP, mainPort);
 
-        Client client = new Client(mainSocket, serverIP, subPort);
-        
-        while(!mainSocket.isClosed()) {
+        label:
+        while(true) {
 
             String str = scan.nextLine();
 
@@ -195,7 +189,7 @@ public class Client {
                             continue;
                         }
 
-                        if(client.currChatRoomName != null) {
+                        if(client != null) {
                             System.out.println("You are already in a chatroom.");
                             continue;
                         }
@@ -203,14 +197,12 @@ public class Client {
                         String chatRoomName = strArray[1];
                         String userName = strArray[2];
 
+                        client = new Client(serverIP, mainPort, subPort);
                         client.requestChatService(strArray[0], chatRoomName, userName);
 
                         String respondMsg = client.msgReader.readLine();
 
                         if(respondMsg.equals("#SUCCESS")) {
-                            client.currChatRoomName = chatRoomName;
-                            client.currUserName = userName;
-
                             if(strArray[0].equals("#CREATE"))
                                 System.out.println("\"" + chatRoomName + "\"" + " chatroom has created!");
                             System.out.println("You are now connected to \"" + chatRoomName + "\" chatroom as " + userName);
@@ -222,10 +214,15 @@ public class Client {
                                 System.out.println("\"" + chatRoomName + "\"" + " chatroom already exists.");
                             else
                                 System.out.println("\"" + chatRoomName + "\"" + " chatroom does not exist.");
-                        }
-                        else
-                            System.out.println("unrecognized respond message.");
 
+                            client.closeResources();
+                            client = null;
+                        }
+                        else {
+                            System.out.println("Unrecognized respond message.");
+                            client.closeResources();
+                            client = null;
+                        }
                         break;
                     case "#PUT":
                     case "#GET":
@@ -236,7 +233,7 @@ public class Client {
 
                         String fileName = strArray[1];
 
-                        if(client.currChatRoomName != null) {
+                        if(client != null) {
                             if(strArray[0].equals("#PUT"))
                                 client.sendFile(fileName);
                             else
@@ -246,20 +243,27 @@ public class Client {
                             System.out.println("You have to join a chatroom first.");
                         break;
                     case "#EXIT":
-                        if (client.currChatRoomName != null) {
+                        if (client != null) {
                             client.requestChatService(strArray[0], null, null);
-                            client.currChatRoomName = null;
-                            client.currUserName = null;
+                            client.closeResources();
+                            client = null;
+                            System.out.println("--- Exit the chatroom ---");
                         }
                         else
                             System.out.println("You are not in a chatroom.");
                         break;
                     case "#STATUS":
-                        if (client.currChatRoomName != null)
+                        if (client != null)
                             client.requestChatService(strArray[0], null, null);
                         else
                             System.out.println("You have to join a chatroom first.");
                         break;
+                    case "#CLOSE":
+                        if(client != null) {
+                            client.requestChatService(strArray[0], null, null);
+                            client.closeResources();
+                        }
+                        break label;
                     default:
                         System.out.println("Unrecognized command.");
                         break;
@@ -267,12 +271,10 @@ public class Client {
             }
             // message From client
             else {
-                if(client.currChatRoomName != null) {
+                if(client != null) {
                     client.writeToBuffer(str);
                 }
             }
         }
-        client.closeResources();
-
     }
 }

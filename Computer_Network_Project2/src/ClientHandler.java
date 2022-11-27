@@ -56,6 +56,7 @@ public class ClientHandler implements Runnable {
         }
         else
             writeToBuffer("#FAIL");
+
     }
 
     public void joinChatRoom(String chatRoomName, String userName) {
@@ -106,8 +107,6 @@ public class ClientHandler implements Runnable {
 
         this.currChatRoomName = null;
         this.currUserName = null;
-
-        writeToBuffer("Exit the chatroom");
     }
 
     public void sendChatRoomInfo() {
@@ -164,12 +163,12 @@ public class ClientHandler implements Runnable {
         byte[] buffer = new byte[64*1024];  // 64KiB
         File file = new File(fileName);
 
-        try {
-            if(!file.exists()) {
-                writeToBuffer("File name \"" + fileName + "\" does not exist.");
-                return;
-            }
+        if(!file.exists()) {
+            writeToBuffer("File name \"" + fileName + "\" does not exist.");
+            return;
+        }
 
+        try {
             Socket socket = subSocket.accept();
             BufferedOutputStream fileSender = new BufferedOutputStream(socket.getOutputStream());
             FileInputStream fis = new FileInputStream(file);
@@ -217,7 +216,9 @@ public class ClientHandler implements Runnable {
 
             while(!mainSocket.isClosed()) {
 
+                System.out.println("waiting");
                 clientMsg = msgReader.readLine();
+                System.out.println("read");
 
                 if(clientMsg == null || clientMsg.isEmpty())
                     continue;
@@ -247,12 +248,16 @@ public class ClientHandler implements Runnable {
                     case "#STATUS":
                         sendChatRoomInfo();
                         break;
+                    case "#CLOSE":
+                        closeResources();
+                        break;
                     default:
                         broadcastMessage(clientMsg);
                         break;
                 }
             }
-            closeResources();
+
+            System.out.println("Client disconnected from the server.");
 
         } catch (IOException e) {
             closeResources();

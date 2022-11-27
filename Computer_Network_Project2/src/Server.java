@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.net.*;
+import java.util.*;
 
 public class Server {
 
@@ -12,13 +13,15 @@ public class Server {
     }
 
     public void startServer() {
+
+        System.out.println("Server starts.");
+
         try {
             Thread thread;
 
             while(!mainSocket.isClosed() && !subSocket.isClosed()) {
 
                 Socket mainSocket = this.mainSocket.accept();
-                //Socket subSocket = this.subSocket.accept();
                 ClientHandler clientHandler = new ClientHandler(mainSocket, this.subSocket);
 
                 thread = new Thread(clientHandler);
@@ -26,9 +29,42 @@ public class Server {
 
             }
 
+            if(mainSocket.isClosed()) {
+                System.out.println("mainSocket is closed.");
+            }
+            else if(subSocket.isClosed()) {
+                System.out.println("subSocket is closed.");
+            }
+
         } catch (IOException e) {
             closeServerSocket();
         }
+
+        System.out.println("Server disconnected.");
+
+    }
+
+    public void listenForCommand() {
+
+        Scanner scan = new Scanner(System.in);
+
+        new Thread(() -> {
+
+            while(true) {
+                String str = scan.nextLine();
+
+                if(str.equals("#SHUTDOWN")) {
+                    System.out.println("Do you really want to shutdown the server?(Y/N)");
+                    str = scan.nextLine();
+
+                    if(str.equals("Y") || str.equals("y")) {
+                        closeServerSocket();
+                        break;
+                    }
+                }
+            }
+
+        }).start();
     }
 
     public void closeServerSocket() {
@@ -59,7 +95,9 @@ public class Server {
         ServerSocket mainSocket = new ServerSocket(mainPort);
         ServerSocket subSocket = new ServerSocket(subPort);
         Server server = new Server(mainSocket, subSocket);
+        server.listenForCommand();
         server.startServer();
+
     }
 
 }
